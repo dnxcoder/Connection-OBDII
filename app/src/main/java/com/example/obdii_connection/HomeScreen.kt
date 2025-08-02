@@ -23,6 +23,17 @@ fun HomeScreen(context: Context, viewModel: HomeScreenViewModel) {
 
     val isBluetoothConnected by viewModel.isBluetoothConnected.collectAsState()
     val rpms by viewModel.rpms.collectAsState()
+    val speed by viewModel.speed.collectAsState()
+    val coolant by viewModel.coolantTemp.collectAsState()
+    val load by viewModel.engineLoad.collectAsState()
+    val map by viewModel.map.collectAsState()
+    val throttle by viewModel.throttle.collectAsState()
+    val voltage by viewModel.voltage.collectAsState()
+    val timing by viewModel.timing.collectAsState()
+    val maf by viewModel.maf.collectAsState()
+    val afr by viewModel.afr.collectAsState()
+    val fuelStatus by viewModel.fuelStatus.collectAsState()
+    val o2 by viewModel.o2.collectAsState()
     val isSocketConnected by viewModel.isSocketConnected.collectAsState()
     val checkEngine by viewModel.checkEngine.collectAsState()
     val devices by viewModel.availableDevices.collectAsState()
@@ -56,14 +67,6 @@ fun HomeScreen(context: Context, viewModel: HomeScreenViewModel) {
         Button(
             shape = RoundedCornerShape(10.dp),
             onClick = {
-                viewModel.getRPMs()
-            }
-        ) {
-            Text(text = "get RPMs")
-        }
-        Button(
-            shape = RoundedCornerShape(10.dp),
-            onClick = {
                 viewModel.checkEngine()
             }
         ) {
@@ -83,7 +86,18 @@ fun HomeScreen(context: Context, viewModel: HomeScreenViewModel) {
         Spacer(modifier = Modifier.height(50.dp))
         Text("Bluetooth is ${if (isBluetoothConnected) "connected" else "disconnected" } ", color = Color.White)
         Text("Stock is ${if (isSocketConnected) "connected" else "disconnected" } ", color = Color.White)
-        Text("RPMS: $rpms ", color = Color.White)
+        Text("RPM: $rpms", color = Color.White)
+        Text("Speed: $speed", color = Color.White)
+        Text("Coolant Temp: $coolant", color = Color.White)
+        Text("Engine Load: $load", color = Color.White)
+        Text("MAP: $map", color = Color.White)
+        Text("Throttle: $throttle", color = Color.White)
+        Text("Voltage: $voltage", color = Color.White)
+        Text("Ignition Timing: $timing", color = Color.White)
+        Text("MAF: $maf", color = Color.White)
+        Text("AFR: $afr", color = Color.White)
+        Text("Fuel Status: $fuelStatus", color = Color.White)
+        Text("O2 Sensor: $o2", color = Color.White)
         Text("Check Engine: $checkEngine", color = Color.White)
     }
 
