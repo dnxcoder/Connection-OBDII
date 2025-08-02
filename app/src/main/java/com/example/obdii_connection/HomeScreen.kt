@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +26,7 @@ fun HomeScreen(context: Context, viewModel: HomeScreenViewModel) {
     val isSocketConnected by viewModel.isSocketConnected.collectAsState()
     val checkEngine by viewModel.checkEngine.collectAsState()
     val devices by viewModel.availableDevices.collectAsState()
+    val isConnecting by viewModel.isConnecting.collectAsState()
     var showDeviceDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -95,6 +97,10 @@ fun HomeScreen(context: Context, viewModel: HomeScreenViewModel) {
             onDismiss = { showDeviceDialog = false }
         )
     }
+
+    if (isConnecting) {
+        ConnectingDialog()
+    }
 }
 
 @Composable
@@ -121,6 +127,21 @@ fun DeviceSelectionDialog(
                         )
                     }
                 }
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+@Composable
+fun ConnectingDialog() {
+    AlertDialog(
+        onDismissRequest = {},
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Connecting...")
             }
         },
         confirmButton = {}
