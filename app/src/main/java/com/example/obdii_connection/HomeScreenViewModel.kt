@@ -10,6 +10,9 @@ import android.util.Log
 import androidx.core.app.ActivityCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.UUID
 
 class HomeScreenViewModel {
@@ -19,12 +22,14 @@ class HomeScreenViewModel {
     private val _isSocketConnected = MutableStateFlow(false)
     private val _checkEngine = MutableStateFlow("")
     private val _availableDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
+    private val _isConnecting = MutableStateFlow(false)
 
     val isBluetoothConnected: StateFlow<Boolean> = _isBluetoothConnected
     val rpms: StateFlow<String> = _rpms
     val isSocketConnected: StateFlow<Boolean> = _isSocketConnected
     val checkEngine: StateFlow<String> = _checkEngine
     val availableDevices: StateFlow<List<BluetoothDevice>> = _availableDevices
+    val isConnecting: StateFlow<Boolean> = _isConnecting
 
     lateinit var socket: BluetoothSocket
     val macAddress: String = "81:23:45:67:89:BA" // Replace with your ELM327 MAC address
@@ -52,51 +57,60 @@ class HomeScreenViewModel {
     }
 
     fun connectToDevice(context: Context, device: BluetoothDevice) {
-        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        _isConnecting.value = true
+        CoroutineScope(Dispatchers.IO).launch {
+            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
 
 
-        if (bluetoothAdapter == null) {
-            Log.e("devBluetooth", "Bluetooth is not supported on this device")
-            return
-        }
-
-        if (!bluetoothAdapter.isEnabled) {
-            Log.e("devBluetooth", "Bluetooth is turned off")
-            return
-        }
-
-        if(bluetoothAdapter.isEnabled){
-            Log.d("devBluetooth", "Bluetooth is enabled")
-            _isBluetoothConnected.value = true
-        }
-
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            Log.e("devBluetooth", "Missing BLUETOOTH_CONNECT permission")
-            return
-        }else {
-            Log.d("devBluetooth", "Bluetooth permission is granted")
-        }
-
-        try {
-            val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-
-            this.socket = try {
-                Log.d("devBluetooth", "Socket granted")
-                device.createRfcommSocketToServiceRecord(uuid)
-            } catch (e: Exception) {
-                Log.e("devBluetooth", "Failed to create socket: ${e.message}")
-                return
+            if (bluetoothAdapter == null) {
+                Log.e("devBluetooth", "Bluetooth is not supported on this device")
+                _isConnecting.value = false
+                return@launch
             }
 
-            socket.connect()
-            _isSocketConnected.value = true
+            if (!bluetoothAdapter.isEnabled) {
+                Log.e("devBluetooth", "Bluetooth is turned off")
+                _isConnecting.value = false
+                return@launch
+            }
 
-        } catch (e: Exception) {
-            Log.e("devBluetooth", "Error: ${e.message}")
+            if(bluetoothAdapter.isEnabled){
+                Log.d("devBluetooth", "Bluetooth is enabled")
+                _isBluetoothConnected.value = true
+            }
+
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.e("devBluetooth", "Missing BLUETOOTH_CONNECT permission")
+                _isConnecting.value = false
+                return@launch
+            }else {
+                Log.d("devBluetooth", "Bluetooth permission is granted")
+            }
+
+            try {
+                val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
+                socket = try {
+                    Log.d("devBluetooth", "Socket granted")
+                    device.createRfcommSocketToServiceRecord(uuid)
+                } catch (e: Exception) {
+                    Log.e("devBluetooth", "Failed to create socket: ${e.message}")
+                    _isConnecting.value = false
+                    return@launch
+                }
+
+                socket.connect()
+                _isSocketConnected.value = true
+
+            } catch (e: Exception) {
+                Log.e("devBluetooth", "Error: ${e.message}")
+            } finally {
+                _isConnecting.value = false
+            }
         }
     }
 
