@@ -1,0 +1,30 @@
+# IDE files
+.idea/
+*.iml
+
+# Build and Gradle
+.gradle/
+build/
+**/build/
+local.properties
+
+# Native builds
+.externalNativeBuild/
+.cxx/
+
+# Logs
+*.log
+
+# Mac system files
+.DS_Store
+
+# Keystores
+*.keystore
+*.jks
+
+# Firebase
+google-services.json
+firebase-debug.log
+
+# Captures
+captures/
