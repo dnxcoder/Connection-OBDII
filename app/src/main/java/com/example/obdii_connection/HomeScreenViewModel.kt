@@ -14,22 +14,44 @@ import java.util.UUID
 
 class HomeScreenViewModel {
 
-    private val _isBluetoothConnected = MutableStateFlow<Boolean>(false)
-    private val _rpms = MutableStateFlow<String>("Nothing")
-    private val _isSocketConnected = MutableStateFlow<Boolean>(false)
-    private  val _checkEngine = MutableStateFlow<String>("")
+    private val _isBluetoothConnected = MutableStateFlow(false)
+    private val _rpms = MutableStateFlow("Nothing")
+    private val _isSocketConnected = MutableStateFlow(false)
+    private val _checkEngine = MutableStateFlow("")
+    private val _availableDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
 
-    public val isBluetoothConnected: StateFlow<Boolean> = _isBluetoothConnected
-    public val rpms: StateFlow<String> = _rpms
-    public val isSocketConnected: StateFlow<Boolean> = _isSocketConnected
-    public val checkEngine: StateFlow<String> = _checkEngine
+    val isBluetoothConnected: StateFlow<Boolean> = _isBluetoothConnected
+    val rpms: StateFlow<String> = _rpms
+    val isSocketConnected: StateFlow<Boolean> = _isSocketConnected
+    val checkEngine: StateFlow<String> = _checkEngine
+    val availableDevices: StateFlow<List<BluetoothDevice>> = _availableDevices
 
-    lateinit var socket: BluetoothSocket;
-    val macAddress: String = "81:23:45:67:89:BA" // Replace with your ELM327 MAC address;
+    lateinit var socket: BluetoothSocket
+    val macAddress: String = "81:23:45:67:89:BA" // Replace with your ELM327 MAC address
     val macAdressOBDII: String = "01:23:45:67:89:BA"
 
+    fun discoverDevices(context: Context) {
+        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter() ?: return
 
-    fun connectToELM327(context: Context) {
+        if (!bluetoothAdapter.isEnabled) {
+            Log.e("devBluetooth", "Bluetooth is turned off")
+            return
+        }
+
+        if (
+            ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.e("devBluetooth", "Missing BLUETOOTH_CONNECT permission")
+            return
+        }
+
+        _availableDevices.value = bluetoothAdapter.bondedDevices.toList()
+    }
+
+    fun connectToDevice(context: Context, device: BluetoothDevice) {
         val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
 
 
@@ -60,12 +82,10 @@ class HomeScreenViewModel {
         }
 
         try {
-            val device: BluetoothDevice = bluetoothAdapter.getRemoteDevice(macAdressOBDII)
             val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
             this.socket = try {
                 Log.d("devBluetooth", "Socket granted")
-                _isSocketConnected.value = true;
                 device.createRfcommSocketToServiceRecord(uuid)
             } catch (e: Exception) {
                 Log.e("devBluetooth", "Failed to create socket: ${e.message}")
@@ -73,6 +93,7 @@ class HomeScreenViewModel {
             }
 
             socket.connect()
+            _isSocketConnected.value = true
 
         } catch (e: Exception) {
             Log.e("devBluetooth", "Error: ${e.message}")
