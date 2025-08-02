@@ -8,17 +8,30 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.app.ActivityCompat
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 
 class HomeScreenViewModel {
 
     private val _isBluetoothConnected = MutableStateFlow(false)
-    private val _rpms = MutableStateFlow("Nothing")
+    private val _rpms = MutableStateFlow("N/A")
+    private val _speed = MutableStateFlow("N/A")
+    private val _coolantTemp = MutableStateFlow("N/A")
+    private val _engineLoad = MutableStateFlow("N/A")
+    private val _map = MutableStateFlow("N/A")
+    private val _throttle = MutableStateFlow("N/A")
+    private val _voltage = MutableStateFlow("N/A")
+    private val _timing = MutableStateFlow("N/A")
+    private val _maf = MutableStateFlow("N/A")
+    private val _afr = MutableStateFlow("N/A")
+    private val _fuelStatus = MutableStateFlow("N/A")
+    private val _o2 = MutableStateFlow("N/A")
     private val _isSocketConnected = MutableStateFlow(false)
     private val _checkEngine = MutableStateFlow("")
     private val _availableDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
@@ -26,12 +39,24 @@ class HomeScreenViewModel {
 
     val isBluetoothConnected: StateFlow<Boolean> = _isBluetoothConnected
     val rpms: StateFlow<String> = _rpms
+    val speed: StateFlow<String> = _speed
+    val coolantTemp: StateFlow<String> = _coolantTemp
+    val engineLoad: StateFlow<String> = _engineLoad
+    val map: StateFlow<String> = _map
+    val throttle: StateFlow<String> = _throttle
+    val voltage: StateFlow<String> = _voltage
+    val timing: StateFlow<String> = _timing
+    val maf: StateFlow<String> = _maf
+    val afr: StateFlow<String> = _afr
+    val fuelStatus: StateFlow<String> = _fuelStatus
+    val o2: StateFlow<String> = _o2
     val isSocketConnected: StateFlow<Boolean> = _isSocketConnected
     val checkEngine: StateFlow<String> = _checkEngine
     val availableDevices: StateFlow<List<BluetoothDevice>> = _availableDevices
     val isConnecting: StateFlow<Boolean> = _isConnecting
 
     lateinit var socket: BluetoothSocket
+    private var dataJob: Job? = null
     val macAddress: String = "81:23:45:67:89:BA" // Replace with your ELM327 MAC address
     val macAdressOBDII: String = "01:23:45:67:89:BA"
 
@@ -105,7 +130,7 @@ class HomeScreenViewModel {
 
                 socket.connect()
                 _isSocketConnected.value = true
-
+                startRealTimeData()
             } catch (e: Exception) {
                 Log.e("devBluetooth", "Error: ${e.message}")
             } finally {
@@ -114,34 +139,118 @@ class HomeScreenViewModel {
         }
     }
 
-    fun getRPMs(){
-        socket.outputStream.write("010C\r".toByteArray())
+    private fun sendCommand(cmd: String): String {
+        socket.outputStream.write("$cmd\r".toByteArray())
         socket.outputStream.flush()
 
         val buffer = ByteArray(1024)
         val bytes = socket.inputStream.read(buffer)
-        val response = String(buffer, 0, bytes)
-
-
-
-
-        Log.d("devBluetooth", "Raw Response from ELM327: $response")
-        Log.d("devBluetooth", "Response from ELM327: ${extractRPMFromResponse(response)}")
-        _rpms.value = "${extractRPMFromResponse(response)}"
+        return String(buffer, 0, bytes)
     }
 
-     fun getKms(){
-        socket.outputStream.write("22F190\r".toByteArray())
-        socket.outputStream.flush()
+    private fun extractBytes(response: String, expectedPid: String, byteCount: Int): List<Int>? {
+        val clean = response.replace("\r", "").trim()
+        val parts = clean.split(" ").filter { it.isNotBlank() }
+        val index = parts.indexOfFirst { it.equals("41", true) }
+        if (index == -1 || parts.size < index + 2 + byteCount) return null
+        if (!parts[index + 1].equals(expectedPid, true)) return null
+        return (0 until byteCount).map { parts[index + 2 + it].toInt(16) }
+    }
 
-        val buffer = ByteArray(1024)
-        val bytes = socket.inputStream.read(buffer)
-        val response = String(buffer, 0, bytes)
+    private fun parseRPM(resp: String): String {
+        val bytes = extractBytes(resp, "0C", 2) ?: return "N/A"
+        val rpm = (bytes[0] * 256 + bytes[1]) / 4
+        return rpm.toString()
+    }
 
+    private fun parseSpeed(resp: String): String {
+        val bytes = extractBytes(resp, "0D", 1) ?: return "N/A"
+        return bytes[0].toString()
+    }
 
-        Log.d("devBluetooth", "Raw Response from ELM327: $response")
-        Log.d("devBluetooth", "Response from ELM327: ${extractRPMFromResponse(response)}")
-        //_rpms.value = "${extractRPMFromResponse(response)}"
+    private fun parseCoolant(resp: String): String {
+        val bytes = extractBytes(resp, "05", 1) ?: return "N/A"
+        return (bytes[0] - 40).toString()
+    }
+
+    private fun parseEngineLoad(resp: String): String {
+        val bytes = extractBytes(resp, "04", 1) ?: return "N/A"
+        val value = bytes[0] * 100 / 255.0
+        return String.format("%.1f", value)
+    }
+
+    private fun parseMap(resp: String): String {
+        val bytes = extractBytes(resp, "0B", 1) ?: return "N/A"
+        return bytes[0].toString()
+    }
+
+    private fun parseThrottle(resp: String): String {
+        val bytes = extractBytes(resp, "11", 1) ?: return "N/A"
+        val value = bytes[0] * 100 / 255.0
+        return String.format("%.1f", value)
+    }
+
+    private fun parseVoltage(resp: String): String {
+        val bytes = extractBytes(resp, "42", 2) ?: return "N/A"
+        val value = (bytes[0] * 256 + bytes[1]) / 1000.0
+        return String.format("%.2f", value)
+    }
+
+    private fun parseTiming(resp: String): String {
+        val bytes = extractBytes(resp, "0E", 1) ?: return "N/A"
+        val value = bytes[0] / 2.0 - 64
+        return String.format("%.1f", value)
+    }
+
+    private fun parseMaf(resp: String): String {
+        val bytes = extractBytes(resp, "10", 2) ?: return "N/A"
+        val value = (bytes[0] * 256 + bytes[1]) / 100.0
+        return String.format("%.2f", value)
+    }
+
+    private fun parseAfr(resp: String): String {
+        val bytes = extractBytes(resp, "44", 2) ?: return "N/A"
+        val lambda = (bytes[0] * 256 + bytes[1]) / 32768.0
+        val afr = lambda * 14.7
+        return String.format("%.2f", afr)
+    }
+
+    private fun parseFuelStatus(resp: String): String {
+        val bytes = extractBytes(resp, "03", 2) ?: return "N/A"
+        return "${bytes[0]} ${bytes[1]}"
+    }
+
+    private fun parseO2(resp: String): String {
+        val bytes = extractBytes(resp, "14", 2) ?: return "N/A"
+        val voltage = bytes[0] / 200.0
+        val trim = bytes[1] * 100 / 255.0
+        return String.format("%.2fV %.1f%%", voltage, trim)
+    }
+
+    private fun startRealTimeData() {
+        if (dataJob?.isActive == true) return
+        dataJob = CoroutineScope(Dispatchers.IO).launch {
+            while (_isSocketConnected.value) {
+                try {
+                    _rpms.value = parseRPM(sendCommand("010C"))
+                    _speed.value = parseSpeed(sendCommand("010D"))
+                    _coolantTemp.value = parseCoolant(sendCommand("0105"))
+                    _engineLoad.value = parseEngineLoad(sendCommand("0104"))
+                    _map.value = parseMap(sendCommand("010B"))
+                    _throttle.value = parseThrottle(sendCommand("0111"))
+                    _voltage.value = parseVoltage(sendCommand("0142"))
+                    _timing.value = parseTiming(sendCommand("010E"))
+                    _maf.value = parseMaf(sendCommand("0110"))
+                    _afr.value = parseAfr(sendCommand("0144"))
+                    _fuelStatus.value = parseFuelStatus(sendCommand("0103"))
+                    _o2.value = parseO2(sendCommand("0114"))
+                } catch (e: Exception) {
+                    Log.e("devBluetooth", "Error reading data: ${e.message}")
+                    _isSocketConnected.value = false
+                }
+                delay(1000)
+            }
+        }
     }
 
     fun checkEngine(): Unit{
@@ -198,24 +307,6 @@ class HomeScreenViewModel {
         Log.d("devBluetooth", result)
         _checkEngine.value = result
     }
-
-
-
-
-    fun extractRPMFromResponse(response: String): Int {
-
-        val clean = response.replace("010C", "").trim()
-        val parts = clean.split(" ")
-
-        return if (parts.size >= 4 && parts[0] == "41" && parts[1] == "0C") {
-            val a = parts[2].toInt(16)
-            val b = parts[3].toInt(16)
-            ((a * 256) + b) / 4
-        } else {
-            -1
-        }
-    }
-
     fun closeSocket(){
         Log.d("devBluetooth", "Closing Socket")
         socket.close()
